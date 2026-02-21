@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex items-center justify-center h-[70vh]">
+    <div class="glass w-full max-w-md p-8 rounded-xl">
+        <h2 class="text-3xl font-bold mb-6 text-center text-white">{% if is_signup %}Sign Up{% else %}Login{% endif %}</h2>
+        <form method="POST">
+            <input name="username" class="w-full bg-zinc-900 border border-zinc-700 rounded p-3 mb-4 text-white" placeholder="Username" required>
+            <input name="password" type="password" class="w-full bg-zinc-900 border border-zinc-700 rounded p-3 mb-6 text-white" placeholder="Password" required>
+            <button class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded" type="submit">Submit</button>
+        </form>
+        <div class="mt-4 text-center">
+            <a href="{{ url_for('main.signup' if not is_signup else 'main.login') }}" class="text-zinc-500 text-sm">{% if is_signup %}Login{% else %}Create Account{% endif %}</a>
+            {% if not is_signup %}<br><a href="{{ url_for('main.admin_login') }}" class="text-red-900 text-xs mt-2 block">Admin Login</a>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
