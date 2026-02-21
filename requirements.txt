@@ -5,3 +5,5 @@ Werkzeug==3.0.1
 python-dotenv==1.0.0
 pytz
 pyTelegramBotAPI==4.14.0
+gunicorn
+psycopg2-binary
