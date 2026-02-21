@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="{ 
+    loading: false,
+    modalOpen: false,
+    resultTitle: '',
+    resultBody: '',
+    resultSuccess: false,
+    timerText: '',
+    timerInterval: null,
+    searchEmail: '',
+    searchCategory: 'Login Code',
+    
+    categories: [
+        { val: 'Login Code', icon: '🔢', label: 'Login Code' },
+        { val: 'Household', icon: '🏠', label: 'Household' },
+        { val: 'Reset', icon: '🔑', label: 'Reset Pwd' },
+        { val: 'Verify Email', icon: '✅', label: 'Verify Email' },
+        { val: 'TV Login', icon: '📺', label: 'TV Login' }
+    ],
+
+    async performSearch() {
+        if (!this.searchEmail) {
+            this.showModal(false, 'INPUT MISSING', 'Please select or type an email address.');
+            return;
+        }
+
+        this.loading = true;
+        
+        try {
+            const response = await fetch('/api/fetch', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    email: this.searchEmail.trim().toLowerCase(), 
+                    category: this.searchCategory 
+                })
+            });
+
+            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+            const data = await response.json();
+            this.handleResponse(data);
+
+        } catch (error) {
+            console.error(error);
+            this.showModal(false, 'CONNECTION FAILED', 'Could not reach server.');
+        } finally {
+            this.loading = false;
+        }
+    },
+
+    handleResponse(data) {
+        const title = data.success ? `${this.searchCategory.toUpperCase()}` : 'RESULT';
+        let body = '';
+
+        if (data.success) {
+            const raw = data.message;
+            const meta = data.meta;
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            let links = [];
+
+            if (Array.isArray(raw)) links = raw;
+            else if (typeof raw === 'string') {
+                const matches = raw.match(urlRegex);
+                if (matches) links = [matches[0]];
+            }
+
+            // --- FIXED TIMER LOGIC ---
+            if (this.timerInterval) clearInterval(this.timerInterval);
+            this.timerText = '';
+
+            if (meta && meta.timestamp) {
+                const emailTime = new Date(meta.timestamp * 1000);
+                const expiryTime = new Date(emailTime.getTime() + meta.validity_minutes * 60000);
+                
+                this.timerInterval = setInterval(() => {
+                    const now = new Date();
+                    const distance = expiryTime - now;
+                    
+                    if (distance < 0) {
+                        this.timerText = '⚠️ EXPIRED';
+                        clearInterval(this.timerInterval);
+                    } else {
+                        // FIXED: Now calculates Hours (h) correctly
+                        const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((distance % (1000 * 60)) / 1000);
+                        this.timerText = `EXPIRES IN: ${h}h ${m}m ${s}s`;
+                    }
+                }, 1000);
+            }
+            // -------------------------
+
+            if (links.length > 0) {
+                body = links.map((link, i) => `
+                    <a href='${link}' target='_blank' class='group block w-full relative overflow-hidden rounded-2xl bg-gradient-to-r from-netflix-red to-netflix-dark p-1 transition-all hover:scale-[1.02] shadow-xl shadow-netflix-red/30 mb-4 text-decoration-none'>
+                        <div class='relative bg-black rounded-xl p-4 flex items-center justify-center gap-3 group-hover:bg-opacity-0 transition-all duration-300'>
+                            <span class='text-2xl'>🔗</span>
+                            <span class='font-black text-white tracking-wider group-hover:text-white'>OPEN LINK ${links.length > 1 ? '#' + (i + 1) : ''}</span>
+                        </div>
+                    </a>
+                `).join('');
+            } else if (this.searchCategory.includes('Code')) {
+                body = `
+                    <div class='text-center py-6'>
+                        <p class='text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] mb-4'>YOUR SECURITY CODE</p>
+                        <div class='inline-block relative group cursor-pointer' onclick='navigator.clipboard.writeText(\x22${raw}\x22)'>
+                            <div class='absolute -inset-1 bg-gradient-to-r from-netflix-red to-purple-600 rounded-lg blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200'></div>
+                            <div class='relative bg-black border border-white/10 rounded-2xl p-8 shadow-2xl'>
+                                <span class='font-mono text-6xl md:text-7xl font-black text-white tracking-[0.15em] select-all'>${raw}</span>
+                            </div>
+                            <p class='text-[10px] text-zinc-600 mt-4 uppercase font-bold tracking-widest group-hover:text-netflix-red transition'>Click to Copy</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                body = `<div class='text-zinc-200 text-center font-medium bg-white/5 p-6 rounded-2xl border border-white/10'>${raw}</div>`;
+            }
+        } else {
+            body = `
+                <div class='flex flex-col items-center gap-6 text-center py-6'>
+                    <div class='w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 shadow-[0_0_30px_rgba(220,38,38,0.2)]'>
+                        <span class='text-4xl grayscale hover:grayscale-0 transition'>⛔</span>
+                    </div>
+                    <div>
+                        <p class='text-white font-bold text-lg mb-2'>Request Failed</p>
+                        <p class='text-red-400 font-mono text-sm border-t border-white/10 pt-4 mt-2'>${data.message}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        this.showModal(data.success, title, body);
+    },
+
+    showModal(success, title, body) {
+        this.resultSuccess = success;
+        this.resultTitle = title;
+        this.resultBody = body;
+        this.modalOpen = true;
+    },
+
+    closeModal() {
+        this.modalOpen = false;
+        if(this.timerInterval) clearInterval(this.timerInterval);
+    }
+}" x-cloak class="relative min-h-[80vh]">
+
+    <!-- Loading Overlay -->
+    <div x-show="loading" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md"
+         style="display: none;">
+        <div class="relative">
+            <div class="w-24 h-24 rounded-full border-t-4 border-b-4 border-netflix-red animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center"><span class="text-3xl animate-pulse">🔎</span></div>
+        </div>
+        <h2 class="mt-8 text-2xl font-black text-white tracking-widest animate-pulse">CONNECTING...</h2>
+        <p class="text-zinc-500 text-sm mt-2 font-mono uppercase tracking-widest" x-text="'Target: ' + (searchEmail || 'Unknown')"></p>
+    </div>
+
+    <!-- Result Modal -->
+    <div x-show="modalOpen" 
+         class="fixed inset-0 z-[90] flex items-center justify-center p-4" 
+         style="display: none;">
+        
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-md" @click="closeModal()"></div>
+        
+        <div class="glass-panel w-full max-w-lg rounded-3xl relative z-10 overflow-hidden transform transition-all duration-300 shadow-2xl shadow-netflix-red/20 border border-white/10"
+             x-show="modalOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95 translate-y-10"
+             x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+             x-transition:leave-end="opacity-0 scale-95 translate-y-10">
+            
+            <div class="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
+                <div>
+                    <h3 class="text-xl font-black text-white tracking-tight flex items-center gap-3">
+                        <span class="text-2xl" x-text="resultSuccess ? '✅' : '⚠️'"></span>
+                        <span x-text="resultTitle" class="uppercase tracking-wider"></span>
+                    </h3>
+                </div>
+                <button @click="closeModal()" class="text-zinc-400 hover:text-white transition p-2 hover:bg-white/10 rounded-full">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="p-8 bg-black/60 relative">
+                <!-- TIMER DISPLAY -->
+                <div x-show="resultSuccess && timerText" class="mb-6 flex justify-center">
+                    <span class="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-4 py-1.5 rounded-full text-xs font-black tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.2)]" x-text="timerText"></span>
+                </div>
+                
+                <div class="font-mono text-sm text-zinc-300 break-words space-y-4" x-html="resultBody"></div>
+            </div>
+
+            <div class="p-4 bg-zinc-900/80 border-t border-white/5">
+                <button @click="closeModal()" class="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-2xl transition border border-white/10 shadow-lg flex items-center justify-center gap-2">
+                    <span>❌ CLOSE WINDOW</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- Left: Search -->
+        <div class="lg:col-span-8 space-y-8">
+            <div class="glass-panel rounded-[2rem] p-8 md:p-10 relative overflow-hidden group border border-white/10">
+                <div class="absolute -top-32 -right-32 w-80 h-80 bg-netflix-red/20 rounded-full blur-[100px] group-hover:bg-netflix-red/30 transition duration-1000"></div>
+                <h2 class="text-3xl font-black text-white mb-8 flex items-center gap-4 relative z-10">
+                    <span class="p-3 rounded-2xl bg-gradient-to-br from-netflix-red to-netflix-dark text-white shadow-lg shadow-netflix-red/40"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span>
+                    SEARCH CONSOLE
+                </h2>
+                <div class="space-y-8 relative z-10">
+                    <div class="space-y-3">
+                        <label class="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1 flex items-center gap-2"><span>📧</span> Target Account</label>
+                        <div class="relative group">
+                            <input type="text" x-model="searchEmail" placeholder="Select from list or type email..." class="glass-input w-full rounded-2xl p-5 pl-14 text-white text-lg font-mono placeholder-zinc-600 focus:bg-black/80 transition-all duration-300 border-white/10 focus:border-netflix-red/50 focus:ring-1 focus:ring-netflix-red/50">
+                            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-netflix-red transition duration-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></div>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <label class="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1 flex items-center gap-2"><span>⚙️</span> Request Type</label>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <template x-for="item in categories" :key="item.val">
+                                <label class="cursor-pointer relative group">
+                                    <input type="radio" name="category" :value="item.val" x-model="searchCategory" class="peer sr-only">
+                                    <div class="h-full p-5 rounded-2xl border border-white/5 bg-zinc-900/40 hover:bg-zinc-800 hover:border-white/20 transition-all duration-300 peer-checked:bg-netflix-red/10 peer-checked:border-netflix-red peer-checked:shadow-[0_0_20px_rgba(229,9,20,0.15)] flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+                                        <div class="absolute inset-0 bg-gradient-to-br from-netflix-red/20 to-transparent opacity-0 peer-checked:opacity-100 transition duration-500"></div>
+                                        <div class="text-3xl filter drop-shadow-lg group-hover:scale-110 transition duration-300 relative z-10" x-text="item.icon"></div>
+                                        <div class="text-[10px] font-black uppercase tracking-widest text-zinc-500 peer-checked:text-white relative z-10" x-text="item.label"></div>
+                                    </div>
+                                </label>
+                            </template>
+                            {% if current_user.is_super_admin %}
+                            <label class="cursor-pointer relative group">
+                                <input type="radio" name="category" value="Verification Code" x-model="searchCategory" class="peer sr-only">
+                                <div class="h-full p-5 rounded-2xl border border-red-900/30 bg-red-950/10 hover:bg-red-900/20 hover:border-red-500/50 transition-all duration-300 peer-checked:bg-red-900/30 peer-checked:border-red-500 peer-checked:shadow-[0_0_20px_rgba(220,38,38,0.3)] flex flex-col items-center justify-center gap-3">
+                                    <div class="text-3xl group-hover:scale-110 transition duration-300">👮</div>
+                                    <div class="text-[10px] font-black uppercase tracking-widest text-red-400 peer-checked:text-white">ADMIN CODE</div>
+                                </div>
+                            </label>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button @click="performSearch()" class="w-full relative overflow-hidden group rounded-2xl p-[1px] shadow-2xl shadow-netflix-red/20 transform active:scale-[0.98] transition-all duration-200 mt-4 cursor-pointer">
+                        <div class="absolute inset-0 bg-gradient-to-r from-netflix-dark via-netflix-red to-netflix-dark bg-[length:200%_auto] animate-[pulse-slow] group-hover:bg-pos-100"></div>
+                        <div class="relative bg-zinc-900 group-hover:bg-opacity-0 rounded-2xl p-5 flex items-center justify-center gap-3 transition duration-300">
+                            <span class="text-2xl group-hover:rotate-12 transition duration-300">🚀</span>
+                            <span class="text-xl font-black text-white tracking-[0.2em] group-hover:text-white transition group-hover:scale-105">FETCH DATA</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right: My Emails -->
+        <div class="lg:col-span-4">
+            <div class="glass-panel rounded-[2rem] h-[650px] flex flex-col sticky top-28 overflow-hidden border border-white/10">
+                <div class="p-6 border-b border-white/10 bg-white/5 backdrop-blur-md">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2"><span class="text-xl">📂</span> MY ACCOUNTS</h3>
+                    <p class="text-xs text-zinc-500 mt-1 uppercase tracking-wider font-bold">Tap to Auto-Fill</p>
+                </div>
+                <div class="flex-grow overflow-y-auto p-4 space-y-2 custom-scrollbar bg-black/20">
+                    {% if emails %}
+                        {% for assignment in emails %}
+                        <div @click="searchEmail='{{ assignment.email_address }}'" class="group p-4 rounded-xl border border-white/5 bg-zinc-900/40 hover:bg-zinc-800 hover:border-netflix-red/50 cursor-pointer transition-all duration-200 shadow-sm relative overflow-hidden">
+                            <div class="absolute inset-y-0 left-0 w-1 bg-netflix-red opacity-0 group-hover:opacity-100 transition duration-200"></div>
+                            <div class="flex items-center gap-3 pl-2">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-800 to-black border border-white/10 flex items-center justify-center text-xs text-zinc-500 group-hover:text-white transition shadow-inner">@</div>
+                                <div class="flex-grow min-w-0"><p class="text-xs text-zinc-300 font-mono truncate group-hover:text-white transition">{{ assignment.email_address }}</p></div>
+                                <div class="opacity-0 group-hover:opacity-100 transition -translate-x-2 group-hover:translate-x-0 text-lg">⚡</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="h-full flex flex-col items-center justify-center text-zinc-600 space-y-4 opacity-50"><span class="text-4xl grayscale">📭</span><div class="text-center"><p class="text-sm font-bold uppercase tracking-widest">No Accounts</p><p class="text-xs mt-1">Contact Admin</p></div></div>
+                    {% endif %}
+                </div>
+                <div class="p-4 border-t border-white/10 bg-white/5 text-center"><p class="text-[10px] text-zinc-600 uppercase font-black tracking-[0.2em]">Total Access: {{ emails|length }}</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

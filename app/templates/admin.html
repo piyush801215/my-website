@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block content %}
+<div x-data="{ activeModal: null, createUserModal: false }">
+    
+    <!-- Header -->
+    <div class="glass-panel p-6 rounded-3xl flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+        <div>
+            <h2 class="text-3xl font-black text-white tracking-tight">Admin Console</h2>
+            <p class="text-zinc-500 text-sm mt-1">Manage users and access permissions</p>
+        </div>
+        <button @click="createUserModal=true" class="bg-white text-black hover:bg-zinc-200 px-6 py-3 rounded-xl font-bold transition shadow-lg flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Create User
+        </button>
+    </div>
+
+    <!-- User Table -->
+    <div class="glass-panel rounded-3xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead>
+                    <tr class="bg-white/5 border-b border-white/5 text-zinc-400 uppercase text-xs tracking-wider">
+                        <th class="p-5 font-bold">User Identity</th>
+                        <th class="p-5 font-bold">Role</th>
+                        <th class="p-5 font-bold">Assigned Accounts</th>
+                        <th class="p-5 font-bold text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                    {% for u in users %}
+                    <tr class="hover:bg-white/5 transition group">
+                        <td class="p-5">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-800 to-black border border-white/10 flex items-center justify-center font-bold text-white shadow-lg">
+                                    {{ u.username[:2].upper() }}
+                                </div>
+                                <span class="font-bold text-white text-base">{{ u.username }}</span>
+                            </div>
+                        </td>
+                        <td class="p-5">
+                            {% if current_user.is_super_admin and u.id != current_user.id %}
+                            <form action="{{ url_for('main.manage_role') }}" method="POST">
+                                <input type="hidden" name="user_id" value="{{ u.id }}">
+                                <select name="role" onchange="this.form.submit()" class="bg-black/50 border border-white/10 text-xs rounded-lg p-2 text-zinc-300 focus:border-white/50 outline-none cursor-pointer">
+                                    <option value="user" {% if u.role=='user' %}selected{% endif %}>User</option>
+                                    <option value="sub_admin" {% if u.role=='sub_admin' %}selected{% endif %}>Sub Admin</option>
+                                    <option value="super_admin" {% if u.role=='super_admin' %}selected{% endif %}>Super Admin</option>
+                                </select>
+                            </form>
+                            {% else %}
+                            <span class="px-3 py-1 rounded-full text-xs font-bold border 
+                                {% if u.role=='super_admin' %}bg-red-900/20 border-red-900 text-red-400{% elif u.role=='sub_admin' %}bg-yellow-900/20 border-yellow-900 text-yellow-400{% else %}bg-zinc-800 border-zinc-700 text-zinc-400{% endif %}">
+                                {{ u.role.replace('_', ' ').upper() }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="p-5">
+                            <div class="flex items-center gap-3">
+                                <span class="text-white font-mono font-bold">{{ u.assigned_emails|length }}</span>
+                                <button @click="activeModal={{ u.id }}" class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-white transition border border-white/5">
+                                    Manage Access
+                                </button>
+                            </div>
+                        </td>
+                        <td class="p-5 text-right">
+                            {% if u.id != current_user.id %}
+                            <a href="{{ url_for('main.delete_user', uid=u.id) }}" onclick="return confirm('Are you sure you want to delete this user?')" 
+                               class="text-zinc-500 hover:text-red-500 transition p-2 inline-block rounded-lg hover:bg-red-900/10">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div x-show="createUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" style="display:none">
+        <div class="glass-panel w-full max-w-sm p-8 rounded-3xl relative border-white/20">
+            <h3 class="text-2xl font-bold text-white mb-6">Create New User</h3>
+            <form action="{{ url_for('main.create_user') }}" method="POST" class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase ml-1">Username</label>
+                    <input name="username" required class="glass-input w-full rounded-xl p-3 mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase ml-1">Password</label>
+                    <input name="password" required class="glass-input w-full rounded-xl p-3 mt-1">
+                </div>
+                {% if current_user.is_super_admin %}
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase ml-1">Role</label>
+                    <select name="role" class="glass-input w-full rounded-xl p-3 mt-1 cursor-pointer bg-black">
+                        <option value="user">User</option>
+                        <option value="sub_admin">Sub Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                    </select>
+                </div>
+                {% endif %}
+                <div class="pt-4 flex gap-3">
+                    <button type="submit" class="flex-1 bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition">Create</button>
+                    <button type="button" @click="createUserModal=false" class="flex-1 bg-zinc-800 text-white font-bold py-3 rounded-xl hover:bg-zinc-700 transition">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Emails Modal -->
+    {% for u in users %}
+    <div x-show="activeModal === {{ u.id }}" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" style="display:none">
+        <div class="glass-panel w-full max-w-4xl h-[80vh] rounded-3xl flex flex-col overflow-hidden relative border-white/20 shadow-2xl">
+            
+            <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div>
+                    <h3 class="text-xl font-bold text-white">Manage Access</h3>
+                    <p class="text-sm text-zinc-400">User: <span class="text-white">{{ u.username }}</span></p>
+                </div>
+                <button @click="activeModal=null" class="text-zinc-400 hover:text-white text-2xl px-2">&times;</button>
+            </div>
+
+            <div class="flex-grow grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+                
+                <!-- Add Section -->
+                <div class="p-6 flex flex-col h-full overflow-y-auto">
+                    <h4 class="text-green-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500"></span> Grant Access
+                    </h4>
+                    <form action="{{ url_for('main.assign_email') }}" method="POST" class="flex-grow flex flex-col">
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <textarea name="emails" 
+                                  placeholder="Paste emails here...&#10;user1@netflix.com&#10;user2@netflix.com" 
+                                  class="glass-input w-full flex-grow rounded-xl p-4 text-sm font-mono leading-relaxed resize-none mb-4" 
+                                  required></textarea>
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-green-900/20">
+                            Assign Emails
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Remove Section -->
+                <div class="p-6 flex flex-col h-full bg-black/20 border-l border-white/5 overflow-hidden">
+                    <h4 class="text-red-400 font-bold text-xs uppercase tracking-widest mb-4 flex justify-between items-center">
+                        <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Revoke Access</span>
+                        <span class="bg-white/10 px-2 py-0.5 rounded text-[10px] text-white">{{ u.assigned_emails|length }} Active</span>
+                    </h4>
+                    
+                    {% if u.assigned_emails %}
+                    <form action="{{ url_for('main.bulk_remove_emails') }}" method="POST" class="flex-grow flex flex-col overflow-hidden">
+                        <div class="flex-grow overflow-y-auto pr-2 space-y-1 custom-scrollbar mb-4">
+                            {% for a in u.assigned_emails %}
+                            <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/5 cursor-pointer group border border-transparent hover:border-white/5 transition">
+                                <input type="checkbox" name="assignment_ids" value="{{ a.id }}" 
+                                       class="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-red-600 focus:ring-0 focus:ring-offset-0">
+                                <span class="text-xs text-zinc-400 group-hover:text-white font-mono truncate transition">{{ a.email_address }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <button type="submit" onclick="return confirm('Remove selected emails?')" 
+                                class="w-full bg-red-900/50 hover:bg-red-800 text-red-100 border border-red-800 font-bold py-3 rounded-xl transition">
+                            Revoke Selected
+                        </button>
+                    </form>
+                    {% else %}
+                    <div class="flex-grow flex flex-col items-center justify-center text-zinc-600">
+                        <p class="text-sm">No assignments yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
