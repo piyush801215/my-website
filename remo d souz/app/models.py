@@ -9,7 +9,7 @@ def load_user(uid): return User.query.get(int(uid))
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256))
+    password_hash = db.Column(db.Text)
     role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     assigned_emails = db.relationship('AssignedEmail', backref='user', lazy=True, cascade="all, delete-orphan")
