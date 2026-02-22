@@ -15,6 +15,7 @@ def setup_initial_admin():
             db.session.commit()
             print("Super Admin Created.")
 
+# Create DB + Admin on startup
 with app.app_context():
     db.create_all()
     setup_initial_admin()
@@ -22,3 +23,8 @@ with app.app_context():
 @app.route("/")
 def home():
     return "Server is working 🚀"
+
+# IMPORTANT FOR RENDER
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
