@@ -5,9 +5,6 @@ import os
 
 app = create_app()
 
-with app.app_context():
-    db.create_all()
-
 def setup_initial_admin():
     with app.app_context():
         if not User.query.filter_by(role='super_admin').first():
@@ -18,8 +15,9 @@ def setup_initial_admin():
             db.session.commit()
             print("Super Admin Created.")
 
-# ✅ CALL AFTER DEFINITION
-setup_initial_admin()
+with app.app_context():
+    db.create_all()
+    setup_initial_admin()
 
 @app.route("/")
 def home():
